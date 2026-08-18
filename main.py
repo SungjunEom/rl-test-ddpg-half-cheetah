@@ -63,11 +63,13 @@ def main():
     parser.add_argument("--ppo_epochs", type=int, default=10, help="PPO update epochs")
     parser.add_argument("--clip_ratio", type=float, default=0.2, help="PPO clip ratio")
     
+    parser.add_argument("--run_id", type=int, default=1, help="Run ID for multiple independent runs")
+    
     args = parser.parse_args()
     
     if args.model_path is None:
-        args.model_path = f"{args.algo}_actor.pth"
-    log_dir = f"runs/{args.algo}_halfcheetah"
+        args.model_path = f"{args.algo}_actor_run_{args.run_id}.pth"
+    log_dir = f"runs/{args.algo}_halfcheetah_run_{args.run_id}"
 
     env_id = "HalfCheetah-v5"
     env = gym.make(env_id)
@@ -158,7 +160,7 @@ def main():
                     break
 
         save_model(agent, args.model_path, args.algo)
-        evaluate_and_record(agent, args.algo, env_id=env_id, filepath=f"{args.algo}_eval_rollout.gif")
+        evaluate_and_record(agent, args.algo, env_id=env_id, filepath=f"{args.algo}_eval_rollout_run_{args.run_id}.gif")
         writer.close()
     
     env.close()
