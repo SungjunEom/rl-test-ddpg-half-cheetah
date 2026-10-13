@@ -4,6 +4,23 @@ import torch.nn as nn
 import torch.optim as optim
 from models.networks.ppo_actor_critic import PPOActor, PPOCritic
 
+
+@torch.no_grad()
+def compute_gae(rewards, values, next_values, terminated, episode_ends, gamma, gae_lambda):
+    """Bootstrap timeouts, but never propagate advantages across resets."""
+    deltas = rewards + gamma * (1.0 - terminated) * next_values - values
+    # Run the sequential recurrence on CPU to avoid thousands of tiny GPU kernels.
+    delta_cpu = deltas.cpu().numpy()
+    continuation = (1.0 - episode_ends).cpu().numpy()
+    advantages = np.empty_like(delta_cpu)
+    gae = np.zeros_like(delta_cpu[0])
+    for t in reversed(range(len(rewards))):
+        gae = delta_cpu[t] + gamma * gae_lambda * continuation[t] * gae
+        advantages[t] = gae
+    advantages = torch.as_tensor(advantages, device=rewards.device)
+    return advantages, advantages + values
+
+
 class PPOAgent:
     def __init__(self, state_dim, action_dim, max_action, lr=3e-4, gamma=0.99, gae_lambda=0.95, clip_ratio=0.2, ppo_epochs=10, device="cuda"):
         self.gamma = gamma
@@ -36,32 +53,17 @@ class PPOAgent:
             action_mean = self.actor.net(state) * self.actor.max_action
         return action_mean.cpu().data.numpy().flatten()
 
-    def train(self, buffer, next_state, done):
-        states, actions, old_logprobs, rewards, values, dones = buffer.get()
+    def train(self, buffer):
+        states, actions, old_logprobs, rewards, values, next_states, terminated, episode_ends = buffer.get()
         
         # Calculate advantages and returns using GAE
         with torch.no_grad():
-            next_state_tensor = torch.FloatTensor(next_state).unsqueeze(0).to(self.device)
-            next_value = self.critic(next_state_tensor).squeeze()
-            
-            advantages = torch.zeros_like(rewards).to(self.device)
-            returns = torch.zeros_like(rewards).to(self.device)
-            
-            gae = 0
-            for t in reversed(range(len(rewards))):
-                if t == len(rewards) - 1:
-                    next_non_terminal = 1.0 - done
-                    next_v = next_value
-                else:
-                    next_non_terminal = 1.0 - dones[t+1]
-                    next_v = values[t+1]
-                    
-                delta = rewards[t] + self.gamma * next_v * next_non_terminal - values[t]
-                gae = delta + self.gamma * self.gae_lambda * next_non_terminal * gae
-                advantages[t] = gae
-                returns[t] = gae + values[t]
-
-            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+            next_values = self.critic(next_states)
+            advantages, returns = compute_gae(
+                rewards, values, next_values, terminated, episode_ends,
+                self.gamma, self.gae_lambda,
+            )
+            advantages = (advantages - advantages.mean()) / (advantages.std(unbiased=False) + 1e-8)
 
         old_logprobs = old_logprobs.sum(dim=-1, keepdim=True)
         

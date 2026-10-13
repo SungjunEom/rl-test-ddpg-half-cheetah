@@ -30,10 +30,11 @@ class DDPGAgent:
     def select_action(self, state, noise_scale=0.1):
         # state is expected to be a numpy array
         state = torch.FloatTensor(state).unsqueeze(0).to(self.device)
-        action = self.actor(state).cpu().data.numpy().flatten()
+        with torch.no_grad():
+            action = self.actor(state).cpu().numpy().flatten()
         
         # Add Gaussian noise for exploration
-        noise = np.random.normal(0, noise_scale, size=action.shape)
+        noise = np.random.normal(0, noise_scale, size=action.shape) if noise_scale else 0.0
         return np.clip(action + noise, -self.max_action, self.max_action)
 
     def train(self, replay_buffer, batch_size=128):

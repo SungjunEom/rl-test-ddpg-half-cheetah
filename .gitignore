@@ -5,3 +5,5 @@ models/__pycache__/*
 models/networks/__pycache__/*
 runs/
 runs/ddpg_halfcheetah/
+__pycache__/
+.pytest_cache/

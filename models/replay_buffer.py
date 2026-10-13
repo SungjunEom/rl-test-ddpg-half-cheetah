@@ -1,5 +1,3 @@
-import random
-import numpy as np
 import torch
 
 class ReplayBuffer:
@@ -16,12 +14,13 @@ class ReplayBuffer:
         self.next_states = torch.zeros((capacity, state_dim), dtype=torch.float32, device=device)
         self.dones = torch.zeros((capacity, 1), dtype=torch.float32, device=device)
 
-    def push(self, state, action, reward, next_state, done):
+    def push(self, state, action, reward, next_state, terminated):
         self.states[self.ptr].copy_(torch.as_tensor(state, device=self.device, dtype=torch.float32))
         self.actions[self.ptr].copy_(torch.as_tensor(action, device=self.device, dtype=torch.float32))
         self.rewards[self.ptr] = float(reward)
         self.next_states[self.ptr].copy_(torch.as_tensor(next_state, device=self.device, dtype=torch.float32))
-        self.dones[self.ptr] = float(done)
+        # Time-limit truncations must retain the continuation value.
+        self.dones[self.ptr] = float(terminated)
         
         self.ptr = (self.ptr + 1) % self.capacity
         self.size = min(self.size + 1, self.capacity)
