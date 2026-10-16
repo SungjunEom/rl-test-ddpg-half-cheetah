@@ -16,7 +16,11 @@ def main():
     args = parser.parse_args()
     plt.rcParams.update({
         'font.family': 'serif',
-        'font.serif': ['Times New Roman', 'DejaVu Serif'],
+        'font.serif': ['cmr10'],
+        'mathtext.fontset': 'cm',
+        'axes.formatter.use_mathtext': True,
+        'axes.unicode_minus': False,
+        'ps.fonttype': 42,
         'font.size': 9,
         'axes.labelsize': 9,
         'axes.titlesize': 9,
@@ -32,7 +36,7 @@ def main():
     fig, ax = plt.subplots(figsize=(3.2, 2.4))
     bounds = []
     reference_steps = None
-    for algo, color, zorder in [('ddpg', '#009E73', 3), ('ppo', '#FF4B2B', 2)]:
+    for algo, color, zorder in [('ddpg', '#0000FF', 3), ('ppo', '#FF0000', 2)]:
         steps, mean, ci, _ = get_all_runs_data(algo, args.num_runs, args.root)
         if reference_steps is not None and not np.array_equal(steps, reference_steps):
             raise ValueError('Algorithms have different evaluation checkpoints')
@@ -42,7 +46,7 @@ def main():
                 linewidth=1.0, zorder=zorder)
         # Keep the experiment's 95% t intervals, not the reference's min/max bands.
         if args.num_runs > 1:
-            ax.fill_between(x, mean-ci, mean+ci, color=color, alpha=0.12,
+            ax.fill_between(x, mean-ci, mean+ci, color=color, alpha=0.25,
                             zorder=zorder-1)
             bounds.extend([float(np.min(mean-ci)), float(np.max(mean+ci))])
         else:
