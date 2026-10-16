@@ -49,6 +49,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", default="runs/corrected")
     parser.add_argument("--num_runs", type=int, default=20)
+    parser.add_argument("--output_prefix", default="comparison_plot", help="Figure filename stem within --root")
     args = parser.parse_args()
     if args.num_runs < 1:
         parser.error("--num_runs must be positive")
@@ -59,21 +60,64 @@ def main():
         configs = [json.loads((Path(args.root) / f"{algo}_halfcheetah_run_{run_id}" / "config.json").read_text()) for algo in results]
         if any(configs[0][key] != configs[1][key] for key in ("seed", "eval_seed", "eval_episodes", "total_steps")):
             raise ValueError(f"Algorithms have incompatible evaluation settings for run {run_id}")
-    fig, (curves, bars) = plt.subplots(1, 2, figsize=(14, 5))
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.serif": ["Times New Roman", "DejaVu Serif"],
+        "font.size": 9,
+        "axes.labelsize": 9,
+        "axes.titlesize": 9,
+        "xtick.labelsize": 8,
+        "ytick.labelsize": 8,
+        "legend.fontsize": 7,
+        "axes.linewidth": 0.8,
+        "grid.alpha": 0.2,
+        "grid.linestyle": "--",
+        "figure.dpi": 300,
+        "savefig.dpi": 300,
+        "mathtext.fontset": "dejavuserif",
+        "pdf.fonttype": 42,
+        "ps.fonttype": 42,
+    })
+    fig, (curves, bars) = plt.subplots(
+        1, 2, figsize=(7.2, 3.25), gridspec_kw={"width_ratios": [1.65, 1]},
+        sharey=True,
+    )
+    colors = {"ddpg": "#0072B2", "ppo": "#D55E00"}
+    for ax in (curves, bars):
+        ax.spines[["top", "right"]].set_visible(False)
+        ax.set_axisbelow(True)
+        ax.grid(axis="y")
+        ax.tick_params(direction="out", width=0.8, length=3)
+        ax.yaxis.set_major_formatter(matplotlib.ticker.StrMethodFormatter("{x:,.0f}"))
     summary = {}
     for index, (algo, (steps, mean, ci, data)) in enumerate(results.items()):
-        curves.plot(steps, mean, label=f"{algo.upper()} (n={len(data)})")
-        curves.fill_between(steps, mean-ci, mean+ci, alpha=0.2)
+        color = colors[algo]
+        curves.plot(steps / 1e6, mean, color=color, linewidth=1.6,
+                    linestyle="-" if algo == "ddpg" else "--", label=algo.upper())
+        curves.fill_between(steps / 1e6, mean-ci, mean+ci, color=color, alpha=0.16, linewidth=0)
         final_mean, final_ci = mean_ci(data[:, -1])
-        bars.bar(index, float(final_mean), yerr=float(final_ci) if len(data) > 1 else None, capsize=5)
+        bars.bar(index, float(final_mean), width=0.58, color=color, alpha=0.85,
+                 yerr=float(final_ci) if len(data) > 1 else None,
+                 error_kw={"elinewidth": 0.9, "capthick": 0.9, "capsize": 3})
+        bars.annotate(f"{float(final_mean):,.0f}",
+                      (index, float(final_mean) + (float(final_ci) if len(data) > 1 else 0)),
+                      xytext=(0, 5), textcoords="offset points", ha="center", fontsize=8)
         summary[algo] = dict(runs=len(data), training_steps=int(steps[-1]),
                              mean_return=float(final_mean), ci95_half_width=float(final_ci) if len(data) > 1 else None,
                              per_run_returns=data[:, -1].tolist())
-    curves.set(xlabel="Training environment steps", ylabel="Deterministic evaluation return", title="HalfCheetah-v5: mean and 95% t interval")
-    curves.legend()
-    bars.set(xticks=[0, 1], xticklabels=["DDPG", "PPO"], ylabel="Deterministic evaluation return", title="Final checkpoint (10 evaluation episodes by default)")
-    fig.tight_layout()
-    fig.savefig(Path(args.root) / "comparison_plot.png")
+    curves.set(xlabel="Training environment steps (millions)", ylabel="Deterministic evaluation return",
+               title="(a) Learning curves", xlim=(0, steps[-1] / 1e6))
+    curves.legend(frameon=False, loc="upper left")
+    bars.set(xticks=[0, 1], xticklabels=["DDPG", "PPO"], title="(b) Final performance", xlim=(-0.6, 1.6))
+    curves.margins(y=0.14)
+    fig.suptitle("HalfCheetah-v5", y=0.98, fontsize=10)
+    episodes = configs[0]["eval_episodes"]
+    note = (f"{args.num_runs} seeds per algorithm; {episodes} evaluation episodes per checkpoint. "
+            + ("Shading / error bars: 95% t confidence intervals." if args.num_runs > 1 else "Confidence intervals unavailable for one seed."))
+    fig.text(0.5, 0.025, note, ha="center", fontsize=7)
+    fig.tight_layout(rect=(0, 0.08, 1, 0.96), w_pad=1.8)
+    for extension in ("png", "pdf", "svg"):
+        fig.savefig(Path(args.root) / f"{args.output_prefix}.{extension}", bbox_inches="tight")
     plt.close(fig)
     (Path(args.root) / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps(summary, indent=2))
