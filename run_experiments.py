@@ -13,7 +13,7 @@ import time
 
 
 def run_experiment(algo, run_id, args, root):
-    cmd = [sys.executable, "-u", "main.py", "--algo", algo, "--run_id", str(run_id),
+    cmd = [sys.executable, "-u", str(root / "source" / "main.py"), "--algo", algo, "--run_id", str(run_id),
            "--seed", str(run_id), "--total_steps", str(args.total_steps),
            "--eval_interval", str(args.eval_interval), "--eval_episodes", str(args.eval_episodes),
            "--device", args.device, "--output_dir", str(root)]
@@ -45,7 +45,8 @@ def main():
     # Keep the exact source and dependency versions alongside expensive runs.
     source_dir = root / "source"
     source_dir.mkdir()
-    for filename in ("main.py", "run_experiments.py", "compare_runs.py", "requirements.txt"):
+    for filename in ("main.py", "run_experiments.py", "compare_runs.py", "requirements.txt",
+                     "plot_reference_style.py", "plot_final_boxplot.py"):
         shutil.copy2(filename, source_dir / filename)
     shutil.copytree("models", source_dir / "models", ignore=shutil.ignore_patterns("__pycache__"))
     versions = {name: importlib.metadata.version(name) for name in
@@ -78,7 +79,9 @@ def main():
         save_status("failed")
         raise SystemExit(f"{len(failures)} runs failed; see logs in {root}")
     try:
-        subprocess.run([sys.executable, "compare_runs.py", "--root", str(root), "--num_runs", str(args.runs)], check=True)
+        for script in ("compare_runs.py", "plot_reference_style.py", "plot_final_boxplot.py"):
+            subprocess.run([sys.executable, str(source_dir / script), "--root", str(root),
+                            "--num_runs", str(args.runs)], check=True)
     except subprocess.CalledProcessError:
         save_status("comparison_failed")
         raise

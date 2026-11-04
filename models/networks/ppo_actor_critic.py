@@ -7,9 +7,9 @@ class PPOActor(nn.Module):
         super(PPOActor, self).__init__()
         self.net = nn.Sequential(
             nn.Linear(state_dim, 256),
-            nn.Tanh(),
+            nn.ReLU(),
             nn.Linear(256, 256),
-            nn.Tanh(),
+            nn.ReLU(),
             nn.Linear(256, action_dim),
             nn.Tanh()
         )
@@ -28,9 +28,9 @@ class PPOCritic(nn.Module):
         super(PPOCritic, self).__init__()
         self.net = nn.Sequential(
             nn.Linear(state_dim, 256),
-            nn.Tanh(),
+            nn.ReLU(),
             nn.Linear(256, 256),
-            nn.Tanh(),
+            nn.ReLU(),
             nn.Linear(256, 1)
         )
 
